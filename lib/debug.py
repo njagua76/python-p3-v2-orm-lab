@@ -1,31 +1,20 @@
-#!/usr/bin/env python3
+from lib import CONN, CURSOR
+from lib.employee import Employee
+from lib.review import Review
 
-from __init__ import CONN, CURSOR
-import random
-from department import Department
-from employee import Employee
-from review import Review
-import ipdb
+# Reset tables
+Employee.drop_table()
+Review.drop_table()
+Employee.create_table()
+Review.create_table()
 
+# Create sample data
+emp1 = Employee.create("Ann Gathoni", "Data Analyst")
+emp2 = Employee.create("Joseph Ndiritu", "Backend Engineer")
 
-def reset_database():
-    Review.drop_table()
-    Employee.drop_table()
-    Department.drop_table()
-    Department.create_table()
-    Employee.create_table()
-    Review.create_table()
+rev1 = Review.create(2023, "Excellent performance and team contribution.", emp1.id)
+rev2 = Review.create(2024, "Strong technical growth and leadership.", emp1.id)
+rev3 = Review.create(2023, "Needs improvement in time management.", emp2.id)
 
-    # Create seed data
-    payroll = Department.create("Payroll", "Building A, 5th Floor")
-    human_resources = Department.create(
-        "Human Resources", "Building C, East Wing")
-    employee1 = Employee.create("Lee", "Manager", payroll.id)
-    employee2 = Employee.create("Sasha", "Manager", human_resources.id)
-    Review.create(2023, "Efficient worker", employee1.id)
-    Review.create(2022, "Good work ethic", employee1.id)
-    Review.create(2023, "Excellent communication skills", employee2.id)
-
-
-reset_database()
-ipdb.set_trace()
+print("All Reviews:", Review.get_all())
+print("Ann's Reviews:", emp1.reviews())
