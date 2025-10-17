@@ -1,9 +1,14 @@
-#!/usr/bin/env python3
+import pytest
+from lib import CONN, CURSOR
+from lib.department import Department
+from lib.employee import Employee
 
-def pytest_itemcollected(item):
-    par = item.parent.obj
-    node = item.obj
-    pref = par.__doc__.strip() if par.__doc__ else par.__class__.__name__
-    suf = node.__doc__.strip() if node.__doc__ else node.__name__
-    if pref or suf:
-        item._nodeid = ' '.join((pref, suf))
+@pytest.fixture(autouse=True)
+def reset_db():
+    """Drop and recreate tables before every test"""
+    Employee.drop_table()
+    Department.drop_table()
+    Department.create_table()
+    Employee.create_table()
+    yield
+    CONN.commit()

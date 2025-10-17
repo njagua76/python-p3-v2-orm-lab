@@ -1,74 +1,139 @@
-from lib import CURSOR, CONN
+from __init__ import CONN, CURSOR
+from department import Department
 
 class Employee:
     all = {}
 
-    def __init__(self, name, job_title, id=None):
+    def __init__(self, name, job_title, department_id, id=None):
         self.id = id
         self.name = name
         self.job_title = job_title
+        self.department_id = department_id
 
     def __repr__(self):
-        return f"<Employee {self.id}: {self.name}, {self.job_title}>"
+        return f"<Employee {self.id}: {self.name}, {self.job_title}, Dept {self.department_id}>"
 
+    # ---------------- PROPERTY VALIDATIONS ----------------
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        if not isinstance(value, str):
+            raise ValueError("Name must be a string")
+        if len(value.strip()) == 0:
+            raise ValueError("Name cannot be empty")
+        self._name = value
+
+    @property
+    def job_title(self):
+        return self._job_title
+
+    @job_title.setter
+    def job_title(self, value):
+        if not isinstance(value, str):
+            raise ValueError("Job title must be a string")
+        if len(value.strip()) == 0:
+            raise ValueError("Job title cannot be empty")
+        self._job_title = value
+
+    @property
+    def department_id(self):
+        return self._department_id
+
+    @department_id.setter
+    def department_id(self, value):
+        if not isinstance(value, int):
+            raise ValueError("Department ID must be an integer")
+        if not Department.find_by_id(value):
+            raise ValueError("Department ID must exist in departments table")
+        self._department_id = value
+
+    # ---------------- DATABASE METHODS ----------------
     @classmethod
     def create_table(cls):
         sql = """
-            CREATE TABLE IF NOT EXISTS employees (
-                id INTEGER PRIMARY KEY,
-                name TEXT,
-                job_title TEXT
-            );
+        CREATE TABLE IF NOT EXISTS employees (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            job_title TEXT,
+            department_id INTEGER,
+            FOREIGN KEY (department_id) REFERENCES departments(id)
+        )
         """
         CURSOR.execute(sql)
         CONN.commit()
 
     @classmethod
     def drop_table(cls):
-        CURSOR.execute("DROP TABLE IF EXISTS employees;")
+        CURSOR.execute("DROP TABLE IF EXISTS employees")
         CONN.commit()
 
     def save(self):
-        if self.id is None:
-            CURSOR.execute(
-                "INSERT INTO employees (name, job_title) VALUES (?, ?);",
-                (self.name, self.job_title)
-            )
+        if self.id:
+            self.update()
+        else:
+            sql = "INSERT INTO employees (name, job_title, department_id) VALUES (?, ?, ?)"
+            CURSOR.execute(sql, (self.name, self.job_title, self.department_id))
             CONN.commit()
             self.id = CURSOR.lastrowid
             type(self).all[self.id] = self
-        else:
-            self.update()
-
-    def update(self):
-        CURSOR.execute(
-            "UPDATE employees SET name = ?, job_title = ? WHERE id = ?;",
-            (self.name, self.job_title, self.id)
-        )
-        CONN.commit()
 
     @classmethod
-    def create(cls, name, job_title):
-        emp = cls(name, job_title)
+    def create(cls, name, job_title, department_id):
+        emp = cls(name, job_title, department_id)
         emp.save()
+        return emp
+
+    def update(self):
+        sql = "UPDATE employees SET name = ?, job_title = ?, department_id = ? WHERE id = ?"
+        CURSOR.execute(sql, (self.name, self.job_title, self.department_id, self.id))
+        CONN.commit()
+
+    def delete(self):
+        sql = "DELETE FROM employees WHERE id = ?"
+        CURSOR.execute(sql, (self.id,))
+        CONN.commit()
+        del type(self).all[self.id]
+        self.id = None
+
+    # ---------------- CLASSMETHODS ----------------
+    @classmethod
+    def instance_from_db(cls, row):
+        emp = cls.all.get(row[0])
+        if emp:
+            emp.name = row[1]
+            emp.job_title = row[2]
+            emp.department_id = row[3]
+        else:
+            emp = cls(row[1], row[2], row[3], row[0])
+            cls.all[row[0]] = emp
         return emp
 
     @classmethod
     def find_by_id(cls, id):
-        sql = "SELECT * FROM employees WHERE id = ?;"
+        sql = "SELECT * FROM employees WHERE id = ?"
         row = CURSOR.execute(sql, (id,)).fetchone()
-        if row:
-            emp = cls.all.get(row[0])
-            if not emp:
-                emp = cls(row[1], row[2], row[0])
-                cls.all[emp.id] = emp
-            return emp
-        return None
+        return cls.instance_from_db(row) if row else None
 
-    #  Relationship to Reviews
+    @classmethod
+    def find_by_name(cls, name):
+        sql = "SELECT * FROM employees WHERE name = ?"
+        row = CURSOR.execute(sql, (name,)).fetchone()
+        return cls.instance_from_db(row) if row else None
+
+    @classmethod
+    def get_all(cls):
+        rows = CURSOR.execute("SELECT * FROM employees").fetchall()
+        return [cls.instance_from_db(row) for row in rows]
+
+    # ---------------- RELATIONSHIPS ----------------
+    def department(self):
+        return Department.find_by_id(self.department_id)
+
     def reviews(self):
-        from lib.review import Review  # avoid circular import
-        sql = "SELECT * FROM reviews WHERE employee_id = ?;"
+        from review import Review
+        sql = "SELECT * FROM reviews WHERE employee_id = ?"
         rows = CURSOR.execute(sql, (self.id,)).fetchall()
         return [Review.instance_from_db(row) for row in rows]
-
